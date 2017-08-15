@@ -1,0 +1,6 @@
+.backup
+platform/*
+src/atftp.zip
+src/atftp/*
+src/syslinux.zip
+src/syslinux/*
