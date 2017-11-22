@@ -199,6 +199,7 @@ function compileSyslinux()
                 (
                     export PATH=${PATH_BIN}:${PATH}; # Use our 'upx' (!)
 
+                    ${_MAKE}  -j $(degreeOfConcurrency) clean         && \
                     ${_MAKE}  -j $(degreeOfConcurrency)                  \
                         PORT_PXE_TFTP=${PORT_PXE_TFTP}                   \
                         PORT_PXE_HTTP=${PORT_PXE_HTTP}                && \
@@ -361,7 +362,7 @@ function compileATFTP()
                     PORT_PXE_TFTP=${PORT_PXE_TFTP}     \
                     PORT_PXE_HTTP=${PORT_PXE_HTTP}  && \
                 ${_STRIP} ./atftpd                  && \
-                which upx && \
+                ${_WHICH} upx                       && \
                 upx       ./atftpd                  && \
                 ${_CP} -p ./atftpd ${binATFTPD}        \
                 ;
@@ -420,7 +421,7 @@ function displayStatus()
                                ${tlog}.err                \
                                2>/dev/null              | \
                     ${_AWK} '{sum += $5}END{print sum}'   );
-        for i in '\\' '|' '-' '/' '-'; do
+        for i in '-' '\\' '|' '/'; do
             ${_SLEEP} 0.4;
             echo -ne "  #     ... ${i} ${nBytesLog} bytes (log)" "\r";
         done;
@@ -447,6 +448,8 @@ function displayStatus()
 
 # -------------------------------------------------------------------------------
 # Make sure all required tools are installed.
+
+_WHICH=$(which which)       || panic "Please install 'which'";
 
 _AR=$(which ar)             || panic "Please install 'ar'";
 _AUTOCONF=$(which autoconf) || panic "Please install 'autoconf'";
