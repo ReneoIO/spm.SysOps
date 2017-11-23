@@ -390,6 +390,135 @@ function compileATFTP()
 
 # -------------------------------------------------------------------------------
 
+function downloadMemTest86()
+{
+    local root=$1;
+    local pkg="memtest86";
+    local url="https://github.com/ReneoIO/3rdParty.memtest86.v4/archive/master.zip";
+    local pkgzip="${pkg}.zip";
+
+    ${_MKDIR} -p ${root};
+    cd           ${root};
+
+    if [ -f ${pkgzip} ]; then
+        return 0;
+    fi;
+
+    local tdir=$(${_MKTEMP} -d --tmpdir="/dev/shm/");
+    local tlck=${tdir}.lck;
+    local tlog=${tdir}.log;
+
+    echo "  # [I] 3rdParty.memtest86: downloading ..." && \
+    (
+        (
+            ${_WGET} ${url} -O ${pkgzip} 2>${tlog}.err 1>${tlog}.out;
+
+            echo ${?} > ${tlck};
+        ) &
+        displayStatus ${tlog} ${tlck};
+    )                      && \
+    ${_RM} -rf ${tdir}        \
+               ${tlog}.err    \
+               ${tlog}.out && \
+    return 0;
+
+    # Leave ${tlog}.* alone (!)
+    (
+        ${_RM} -rf ${tdir};
+        cd         ${root};
+        ${_UNLINK} ${pkgzip};
+    ) 2>/dev/null 1>/dev/null;
+
+    return 1;
+}
+
+function compileMemTest86()
+{
+    local PATH_BIN=$1;
+    local rootSrc=$2;
+    local binMemTest86=$3;
+    local pkg="memtest86";
+    local pkgzip=$(cd `${_DIRNAME} ${rootSrc}` && pwd)/${pkg}.zip;
+
+    if [ -f "${binMemTest86}" ]; then
+        return 0;
+    fi;
+
+    ${_MKDIR} -p ${rootSrc};
+    cd           ${rootSrc};
+
+    local tdir=$(${_MKTEMP} -d --tmpdir="/dev/shm/");
+    local tlck=${tdir}.lck;
+    local tlog=${tdir}.log;
+    local prefix="3rdParty.memtest86.v4-master";
+
+    echo "  # [I] 3rdParty.memtest86: extracting ..." && \
+    (
+        (
+            (
+                ${_UNZIP} -d ${tdir} ${pkgzip}               && \
+                (
+                    cd ${tdir} && ${_TAR} -cf ${tdir}.tar .;
+                )                                            && \
+                ${_TAR} --exclude=${prefix}/config.c            \
+                        --exclude=${prefix}/config.h            \
+                        --exclude=${prefix}/cpuid.c             \
+                        --exclude=${prefix}/error.c             \
+                        --exclude=${prefix}/init.c              \
+                        --exclude=${prefix}/lib.c               \
+                        --exclude=${prefix}/main.c              \
+                        --exclude=${prefix}/Makefile            \
+                        --exclude=${prefix}/memsize.c           \
+                        --exclude=${prefix}/rlib.c              \
+                        --exclude=${prefix}/rlib.h              \
+                        --exclude=${prefix}/screen_buffer.c     \
+                        --exclude=${prefix}/screen_buffer.h     \
+                        --exclude=${prefix}/smp.c               \
+                        --exclude=${prefix}/test.c              \
+                        --exclude=${prefix}/test.h              \
+                        --strip 2                               \
+                        -xf                 ${tdir}.tar      && \
+                ${_RM}  -rf                 ${tdir}.tar         \
+                                            ${tdir}             \
+                ;
+            ) 2>${tlog}.err 1>${tlog}.out;
+
+            echo ${?} > ${tlck};
+        ) &
+        displayStatus ${tlog} ${tlck};
+    )                                    && \
+    echo "  # [I] ${pkg}: compiling ..." && \
+    (
+        (
+            (
+                ${_MAKE} clean                            && \
+                ${_MAKE} -j $(degreeOfConcurrency)        && \
+                ${_CP}   -p ./memtest.bin ${binMemTest86}    \
+                ;
+            ) 2>${tlog}.err 1>${tlog}.out;
+
+            echo ${?} > ${tlck};
+        ) &
+        displayStatus ${tlog} ${tlck};
+    )                      && \
+    ${_RM} -rf ${tdir}        \
+               ${tdir}.tar    \
+               ${tlog}.err    \
+               ${tlog}.out && \
+    return 0;
+
+    # Leave ${tlog}.* alone (!)
+    (
+        ${_RM} -rf ${tdir}     \
+                   ${tdir}.tar ;
+        cd         ${root};
+        ${_UNLINK} ${pkgzip};
+    ) 2>/dev/null 1>/dev/null;
+    return 1;
+}
+
+# -------------------------------------------------------------------------------
+
 function degreeOfConcurrency()
 {
     local rval=$(

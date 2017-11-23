@@ -33,12 +33,23 @@ PORT_PXE_TFTP := 69
 
 default:
 	@echo " # [I] Enter:";
-	@echo " # [I]     make all; # Build all binaries";
+	@echo " # [I]     make all; # Build all binaries + libraries";
 
-all    : _exeSyslinux _exeATFTP
+all    : _exeSyslinux _exeATFTP _exeMemTest86
 
 # --------------------------------------------------------------------------------------
 # Private rules:
+
+_exeMemTest86:
+	@[ -f ${PATH_BIN}/memtest.bin ]              || \
+	(                                               \
+      . ${ROOT}/__/scripts/make.sh              && \
+      downloadMemTest86 ${ROOT}/src             && \
+      compileMemTest86  ${PATH_BIN}                \
+                        ${ROOT}/src/memtest86      \
+                        ${PATH_BIN}/memtest.bin    \
+      ;                                            \
+	);
 
 _exeATFTP: _exeSyslinux
 	@[ -f ${PATH_BIN}/atftpd ]              || \
