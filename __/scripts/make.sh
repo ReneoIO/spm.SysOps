@@ -140,6 +140,7 @@ function compileSyslinux()
     local PORT_PXE_TFTP=$2;
     local libSyslinuxATFTP=$3;
     local PATH_BIN=$4;
+    local PATH_LIB=$(cd ${PATH_BIN} && ${_MKDIR} -p ../lib && cd ../lib && pwd);
     local rootSrc=$5;
     local pkg="syslinux";
     local pkgzip=$(cd `${_DIRNAME} ${rootSrc}` && pwd)/${pkg}.zip;
@@ -170,6 +171,8 @@ function compileSyslinux()
                         --exclude=${prefix}/core/fs/pxe/tftp.c     \
                         --exclude=${prefix}/core/fs/pxe/tftp.h     \
                         --exclude=${prefix}/com32/lib/sys/module/elf_module.c \
+                        --exclude=${prefix}/com32/menu/vesamenu.c  \
+                        --exclude=${prefix}/com32/menu/menumain.c  \
                         --exclude=${prefix}/efi/tcp.c              \
                         --exclude=${prefix}/diag/geodsp/Makefile   \
                         --exclude=${prefix}/extlinux/Makefile      \
@@ -224,10 +227,21 @@ function compileSyslinux()
                 ) && \
                 (
                     ${_MKDIR} -p ${PATH_BIN}                          && \
-                    for exe in `${_FIND} -type f -name "ldlinux.c32"`    \
-                               `${_FIND} -type f -name "memdisk"`        \
+                    for exe in bios/memdisk/memdisk                      \
+                               bios/com32/chain/chain.c32                \
+                               bios/com32/elflink/ldlinux/ldlinux.c32    \
+                               bios/com32/menu/vesamenu.c32              \
+                               bios/com32/modules/pxechn.c32             \
+                               bios/core/lpxelinux.0                     \
                         ; do
-                        ${_CP} -p ${exe} ${PATH_BIN};
+                        ${_CP} -p ${exe} ${PATH_BIN} || exit -1;
+                    done                                              && \
+                                                                         \
+                    ${_MKDIR} -p ${PATH_LIB}                          && \
+                    for lib in bios/com32/libutil/libutil.c32            \
+                               bios/com32/lib/libcom32.c32               \
+                        ; do
+                        ${_CP} -p ${lib} ${PATH_LIB} || exit -1;
                     done;
                 );
             ) 2>${tlog}.err 1>${tlog}.out;
@@ -608,5 +622,8 @@ _UNLINK=$(which unlink)     || panic "Please install 'unlink'";
 _UNZIP=$(which unzip)       || panic "Please install 'unzip'";
 _WC=$(which wc)             || panic "Please install 'wc'";
 _WGET=$(which wget)         || panic "Please install 'wget'";
+
+# Utilities required when compiling code ...
+_NASM=$(which nasm)         || panic "Please install 'nasm'";
 
 # -------------------------------------------------------------------------------

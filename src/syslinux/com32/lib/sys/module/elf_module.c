@@ -246,11 +246,9 @@ int module_load(struct elf_module *module) {
 				p = dep;
 
 			argv[0] = p;
-         printf("About to load .... %s\n", p);
-         
 			res = spawn_load(p, 1, argv);
 			if (res < 0) {
-				printf("Failed to load WTF ? %s\n", p);
+				printf("Failed to load %s\n", p);
 				goto error;
 			}
 		}
