@@ -113,8 +113,8 @@ AC_CHECK_LIB(pthread, pthread_create, [LIBPTHREAD=-lpthread],
 AC_SUBST(LIBPTHREAD)
 
 dnl SyslinuxATFTP support is needed in the server
-AC_CHECK_LIB(SyslinuxATFTP, _binary_lpxelinux_0_start, [LIBSYSLINUX=-lSyslinuxATFTP],
-		      [AC_MSG_ERROR(not found)])
+AC_CHECK_LIB(SyslinuxATFTP, _binary_ipxe_pxe_start, [LIBSYSLINUX=-lSyslinuxATFTP],
+            [AC_MSG_ERROR(not found)])
 AC_SUBST(LIBSYSLINUX)
 
 dnl If we want libreadline support

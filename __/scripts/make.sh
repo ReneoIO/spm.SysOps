@@ -43,7 +43,8 @@ function download3rdPartyPackages()
         (
             (
                 (
-                    cd ${tdir}                                 && \
+                    mkdir -p ${tdir}                           && \
+                    cd       ${tdir}                           && \
                     ${_GIT} clone --progress --depth 1 ${url}     \
                     ;
                 ) 2>${tlog}.err 1>${tlog}.out;
@@ -66,9 +67,11 @@ function download3rdPartyPackages()
                     ${_MKDIR} -p   ${PATH_BIN}            && \
                     ${_RM}    -f   ${PATH_BIN}/upx        && \
                     cd             ${PATH_BIN}            && \
-                    echo "upx" >   ${tdir}/.bz2           && \
-                    ${_TAR}   -T   ${tdir}/.bz2 --strip 1    \
-                              -xf  ${dotbz2}                 \
+                    ${_TAR}   --strip 1                      \
+                              --extract                      \
+                              --file ${dotbz2}               \
+                              --wildcards                    \
+                              --no-anchored 'upx'            \
                     ;
                 ) 2>${tlog}.err 1>${tlog}.out;
 
@@ -202,27 +205,36 @@ function compileSyslinux()
                 (
                     export PATH=${PATH_BIN}:${PATH}; # Use our 'upx' (!)
 
-                    ${_MAKE}  -j $(degreeOfConcurrency) clean         && \
-                    ${_MAKE}  -j $(degreeOfConcurrency)                  \
-                        PORT_PXE_TFTP=${PORT_PXE_TFTP}                   \
-                        PORT_PXE_HTTP=${PORT_PXE_HTTP}                && \
-                    ${_MKDIR} -p $(${_DIRNAME} ${libSyslinuxATFTP})   && \
-                    ${_RM}    -f               ${libSyslinuxATFTP}    && \
-                    for exe in `${_FIND} -type f -name "lpxelinux.0"`    \
+                    ${_MAKE}  -j $(degreeOfConcurrency) clean             && \
+                    ${_MAKE}  -j $(degreeOfConcurrency)                      \
+                        PORT_PXE_TFTP=${PORT_PXE_TFTP}                       \
+                        PORT_PXE_HTTP=${PORT_PXE_HTTP}                    && \
+                    ${_MKDIR} -p $(${_DIRNAME} ${libSyslinuxATFTP})       && \
+                    ${_RM}    -f               ${libSyslinuxATFTP}        && \
+                    for exe in                                               \
+                        ${rootSrc}/../ipxe/src/bin-x86_64-efi/ipxe.efi       \
+                        ${rootSrc}/../ipxe/src/bin-x86_64-efi/snponly.efi    \
+                        ${rootSrc}/../ipxe/src/bin/ipxe.pxe                  \
                         ; do
                         local vroot=$(${_DIRNAME} ${exe});
                         local exe_=$(${_BASENAME} ${exe});
 
-                        cd ${vroot}                     && \
-                        ${_OBJCOPY} -I binary              \
-                                    -O elf64-x86-64        \
-                                    -B i386:x86-64         \
-                                    ${exe_}                \
-                                    ${exe_}.o           && \
-                        ${_AR} rvs  ${libSyslinuxATFTP}    \
-                                    ${exe_}.o           && \
-                        ${_UNLINK}  ${exe_}.o              \
-                        ;
+                        (
+                          cd ${vroot}                     && \
+                          ${_OBJCOPY} -I binary              \
+                                      -O elf64-x86-64        \
+                                      -B i386:x86-64         \
+                                      ${exe_}                \
+                                      ${exe_}.o           && \
+                          ${_AR} rvs  ${libSyslinuxATFTP}    \
+                                      ${exe_}.o           && \
+                          ${_UNLINK}  ${exe_}.o              \
+                          ;
+                        );
+                        stat=$?;
+                        if [ ! ${stat} = 0 ]; then
+                           exit ${stat};
+                        fi;
                     done;
                 ) && \
                 (
@@ -342,8 +354,14 @@ function compileATFTP()
                 )                                            && \
                 ${_TAR} --exclude=${prefix}/configure.ac        \
                         --exclude=${prefix}/Makefile.am         \
+                        --exclude=${prefix}/argz.h              \
+                        --exclude=${prefix}/tftp_def.c          \
+                        --exclude=${prefix}/tftp_def.h          \
+                        --exclude=${prefix}/tftp_io.c           \
                         --exclude=${prefix}/tftpd.c             \
+                        --exclude=${prefix}/tftpd.h             \
                         --exclude=${prefix}/tftpd_file.c        \
+                        --exclude=${prefix}/tftpd_list.c        \
                         --strip 2                               \
                         -xf                 ${tdir}.tar      && \
                 ${_RM}  -rf                 ${tdir}.tar         \
@@ -527,6 +545,202 @@ function compileMemTest86()
                    ${tdir}.tar ;
         cd         ${root};
         ${_UNLINK} ${pkgzip};
+    ) 2>/dev/null 1>/dev/null;
+    return 1;
+}
+
+# -------------------------------------------------------------------------------
+
+function downloadIPXE()
+{
+    local root=$1;
+    local pkg="ipxe";
+    local url="https://github.com/ReneoIO/3rdParty.ipxe/archive/master.zip";
+    local pkgzip="${pkg}.zip";
+
+    ${_MKDIR} -p ${root};
+    cd           ${root};
+
+    if [ -f ${pkgzip} ]; then
+        return 0;
+    fi;
+
+    local tdir=$(${_MKTEMP} -d --tmpdir="/dev/shm/");
+    local tlck=${tdir}.lck;
+    local tlog=${tdir}.log;
+
+    echo "  # [I] 3rdParty.ipxe: downloading ..." && \
+    (
+        (
+            ${_WGET} ${url} -O ${pkgzip} 2>${tlog}.err 1>${tlog}.out;
+
+            echo ${?} > ${tlck};
+        ) &
+        displayStatus ${tlog} ${tlck};
+    )                      && \
+    ${_RM} -rf ${tdir}        \
+               ${tlog}.err    \
+               ${tlog}.out && \
+    return 0;
+
+    # Leave ${tlog}.* alone (!)
+    (
+        ${_RM} -rf ${tdir};
+        cd         ${root};
+        ${_UNLINK} ${pkgzip};
+    ) 2>/dev/null 1>/dev/null;
+
+    return 1;
+}
+
+function compileIPXE()
+{
+    local PATH_BIN=$1;
+    local rootSrc=$2;
+    local pkg="ipxe";
+    local pkgzip=$(cd `${_DIRNAME} ${rootSrc}` && pwd)/${pkg}.zip;
+
+    if [ -f "${rootSrc}/src/bin-x86_64-efi/ipxe.efi"    ] && \
+       [ -f "${rootSrc}/src/bin-x86_64-efi/snponly.efi" ] && \
+       [ -f "${rootSrc}/src/bin/ipxe.pxe" ]                  ; then
+        return 0;
+    fi;
+
+    ${_MKDIR} -p ${rootSrc};
+    cd           ${rootSrc};
+
+    local tdir=$(${_MKTEMP} -d --tmpdir="/dev/shm/");
+    local tlck=${tdir}.lck;
+    local tlog=${tdir}.log;
+    local prefix="3rdParty.ipxe-master";
+
+    echo "  # [I] 3rdParty.ipxe: extracting ..." && \
+    (
+        (
+            (
+                ${_UNZIP} -d ${tdir} ${pkgzip}   && \
+                (
+                    cd ${tdir} && ${_TAR} -cf ${tdir}.tar .;
+                )                                                        && \
+                ${_TAR} --exclude=${prefix}/src/config/branding.h           \
+                        --exclude=${prefix}/src/config/console.BIOS.h       \
+                        --exclude=${prefix}/src/config/console.UEFI.h       \
+                        --exclude=${prefix}/src/config/console.h            \
+                        --exclude=${prefix}/src/config/defaults/efi.h       \
+                        --exclude=${prefix}/src/config/general.h            \
+                        --exclude=${prefix}/src/core/exec.c                 \
+                        --exclude=${prefix}/src/core/main.c                 \
+                        --exclude=${prefix}/src/core/monojob.c              \
+                        --exclude=${prefix}/src/core/pinger.c               \
+                        --exclude=${prefix}/src/hci/commands/ifmgmt_cmd.c   \
+                        --exclude=${prefix}/src/hci/commands/ping_cmd.c     \
+                        --exclude=${prefix}/src/hci/strerror.c              \
+                        --exclude=${prefix}/src/include/errno.h             \
+                        --exclude=${prefix}/src/include/ipxe/pinger.h       \
+                        --exclude=${prefix}/src/include/usr/ifmgmt.h        \
+                        --exclude=${prefix}/src/include/usr/pingmgmt.h      \
+                        --exclude=${prefix}/src/run.sh                      \
+                        --exclude=${prefix}/src/usr/autoboot.c              \
+                        --exclude=${prefix}/src/usr/ifmgmt.c                \
+                        --exclude=${prefix}/src/usr/pingmgmt.c              \
+                        --strip 2                                           \
+                        -xf                 ${tdir}.tar                  && \
+                ${_RM}  -rf                 ${tdir}.tar                     \
+                                            ${tdir}                         \
+                ;
+            ) 2>${tlog}.err 1>${tlog}.out;
+
+            echo ${?} > ${tlck};
+        ) &
+        displayStatus ${tlog} ${tlck};
+    )                                           && \
+    echo "  # [I] 3rdParty.ipxe: compiling ..." && \
+    (
+        (
+            (
+                if [ ! -f "${BOOTSTRAP}" ]; then
+                    echo "";
+                    echo " [E] Please define env variable:";
+                    echo "           'BOOTSTRAP'";
+                    echo "     (path to ipxe bootstrap script)";
+                    echo "";
+                    exit 1;
+                fi;
+                cd ./src                              && \
+                   ./run.sh -bootstrap "${BOOTSTRAP}"    \
+                   ;
+            ) 2>${tlog}.err 1>${tlog}.out;
+
+            echo ${?} > ${tlck};
+        ) &
+        displayStatus ${tlog} ${tlck};
+    )                      && \
+    ${_RM} -rf ${tdir}        \
+               ${tdir}.tar    \
+               ${tlog}.err    \
+               ${tlog}.out && \
+    return 0;
+
+    # Leave ${tlog}.* alone (!)
+    (
+        ${_RM} -rf ${tdir}     \
+                   ${tdir}.tar ;
+        cd         ${root};
+        ${_UNLINK} ${pkgzip};
+    ) 2>/dev/null 1>/dev/null;
+    return 1;
+}
+
+# -------------------------------------------------------------------------------
+
+function compileDMIDump()
+{
+    local PATH_BIN=$1;
+    local rootSrc=$2;
+    local binDMIDump=$3;
+    local pkg="dmidump";
+    local exe_=$(${_BASENAME} ${binDMIDump});
+
+    if [ -f "${binDMIDump}" ]; then
+        return 0;
+    fi;
+
+    ${_MKDIR} -p ${rootSrc};
+    cd           ${rootSrc};
+
+    local tdir=$(${_MKTEMP} -d --tmpdir="/dev/shm/");
+    local tlck=${tdir}.lck;
+    local tlog=${tdir}.log;
+    local prefix="dmidump";
+
+    echo "  # [I] ${pkg}: compiling ..." && \
+    (
+        (
+            (
+                export PATH=${PATH_BIN}:${PATH}; # Use our 'upx' (!)
+
+                ${_MAKE} -j $(degreeOfConcurrency) clean && \
+                ${_MAKE} -j $(degreeOfConcurrency) all   && \
+                ${_STRIP} ./${exe_}                      && \
+                ${_WHICH} upx                            && \
+                upx       ./${exe_}                      && \
+                ${_CP} -p ./${exe_} ${binDMIDump}        && \
+                ${_MAKE} -j $(degreeOfConcurrency) clean    \
+                ;
+            ) 2>${tlog}.err 1>${tlog}.out;
+
+            echo ${?} > ${tlck};
+        ) &
+        displayStatus ${tlog} ${tlck};
+    )                      && \
+    ${_RM} -rf ${tdir}        \
+               ${tlog}.err    \
+               ${tlog}.out && \
+    return 0;
+
+    # Leave ${tlog}.* alone (!)
+    (
+        ${_RM} -rf ${tdir};
     ) 2>/dev/null 1>/dev/null;
     return 1;
 }

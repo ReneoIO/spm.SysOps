@@ -27,19 +27,41 @@
 #include "tftp_def.h"
 #include "tftp_rfile.h"
 
-static rfile_t _lpxelinux;
+static rfile_t _pxe; // 64bit legacy mode 
+static rfile_t _efi; // 64bit UEFI mode
+static rfile_t _snp; // 64bit SNPONLY
 
 void initEFS()
 {
   {
-    extern unsigned char _binary_lpxelinux_0_start;
-    extern unsigned char _binary_lpxelinux_0_end;
-    extern unsigned char _binary_lpxelinux_0_size;
+    extern unsigned char _binary_ipxe_pxe_start;
+    extern unsigned char _binary_ipxe_pxe_end;
+    extern unsigned char _binary_ipxe_pxe_size;
     
-    _lpxelinux._start =                     &_binary_lpxelinux_0_start;
-    _lpxelinux._end   =                     &_binary_lpxelinux_0_end;
-    _lpxelinux._size  = (unsigned long int)(&_binary_lpxelinux_0_size);
-    _lpxelinux._head  =                     &_binary_lpxelinux_0_start;
+    _pxe._start =                     &_binary_ipxe_pxe_start;
+    _pxe._end   =                     &_binary_ipxe_pxe_end;
+    _pxe._size  = (unsigned long int)(&_binary_ipxe_pxe_size);
+    _pxe._head  =                     &_binary_ipxe_pxe_start;
+  }
+  {
+    extern unsigned char _binary_ipxe_efi_start;
+    extern unsigned char _binary_ipxe_efi_end;
+    extern unsigned char _binary_ipxe_efi_size;
+    
+    _efi._start =                     &_binary_ipxe_efi_start;
+    _efi._end   =                     &_binary_ipxe_efi_end;
+    _efi._size  = (unsigned long int)(&_binary_ipxe_efi_size);
+    _efi._head  =                     &_binary_ipxe_efi_start;
+  }
+  {
+    extern unsigned char _binary_snponly_efi_start;
+    extern unsigned char _binary_snponly_efi_end;
+    extern unsigned char _binary_snponly_efi_size;
+    
+    _snp._start =                     &_binary_snponly_efi_start;
+    _snp._end   =                     &_binary_snponly_efi_end;
+    _snp._size  = (unsigned long int)(&_binary_snponly_efi_size);
+    _snp._head  =                     &_binary_snponly_efi_start;
   }
 }
 
@@ -51,12 +73,16 @@ int rfileFeof(rfile_t *fp)
 int rfileOpen(rfile_t *fp,
               char    *filename) 
 {
-  char const * const lpxelinux = "lpxelinux.0";
-  char const * const pxelinux  = "pxelinux.0";
-  
-  if ((strncmp(filename, lpxelinux, strlen(lpxelinux)+1) == 0) ||
-      (strncmp(filename, pxelinux,  strlen(pxelinux )+1) == 0)) {
-    return (*fp = _lpxelinux, OK);
+  char const * const pxe = "ipxe.pxe";
+  char const * const efi = "ipxe.efi";
+  char const * const snp = "snponly.efi";
+
+  if (strncmp(filename, pxe, strlen(pxe)+1) == 0) {
+    return (*fp = _pxe, OK);
+  } else if (strncmp(filename, efi, strlen(efi)+1) == 0) {
+    return (*fp = _efi, OK);
+  } else if (strncmp(filename, snp, strlen(snp)+1) == 0) {
+    return (*fp = _snp, OK);
   } else {
     return ERR;
   }

@@ -35,7 +35,7 @@ default:
 	@echo " # [I] Enter:";
 	@echo " # [I]     make all; # Build all binaries + libraries";
 
-all    : _exeSyslinux _exeATFTP _exeMemTest86
+all    : _exeIPXE _exeSyslinux _exeATFTP _exeDMIDump _exeMemTest86
 
 # --------------------------------------------------------------------------------------
 # Private rules:
@@ -65,7 +65,7 @@ _exeATFTP: _exeSyslinux
       ;                                       \
 	);
 
-_exeSyslinux: _exe3rdPartyPackages
+_exeSyslinux: _exe3rdPartyPackages _exeIPXE
 	@[ -f ${PATH_LIB}/__/libSyslinuxATFTP.a ]             || \
 	(                                                        \
       . ${ROOT}/__/scripts/make.sh                       && \
@@ -76,6 +76,26 @@ _exeSyslinux: _exe3rdPartyPackages
                        ${PATH_BIN}                          \
                        ${ROOT}/src/syslinux                 \
       ;                                                     \
+	);
+
+
+_exeDMIDump: _exe3rdPartyPackages
+	@[ -f ${PATH_BIN}/dmidump ]            || \
+	(                                                        \
+      . ${ROOT}/__/scripts/make.sh             && \
+      compileDMIDump ${PATH_BIN}                  \
+                     ${ROOT}/src/dmidump          \
+                     ${PATH_BIN}/dmidump          \
+      ;                                           \
+	);
+
+_exeIPXE: _exe3rdPartyPackages
+	@(                                        \
+      . ${ROOT}/__/scripts/make.sh             && \
+      downloadIPXE ${ROOT}/src                 && \
+      compileIPXE  ${PATH_BIN}                    \
+                   ${ROOT}/src/ipxe               \
+      ;                                           \
 	);
 
 _exe3rdPartyPackages: _dirBIN

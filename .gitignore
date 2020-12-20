@@ -2,7 +2,9 @@
 platform/*
 src/atftp.zip
 src/atftp/*
-src/syslinux.zip
-src/syslinux/*
+src/ipxe.zip
+src/ipxe/*
 src/memtest86.zip
 src/memtest86/*
+src/syslinux.zip
+src/syslinux/*
